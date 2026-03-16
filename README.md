@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/protembedder.svg)](https://pypi.org/project/protembedder/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Extract protein embeddings from FASTA files using ESM-2 and ProtT5 protein language models.
+Extract protein embeddings from FASTA files using ESM-2, ProtT5, and ProtBert protein language models.
 
 ## Installation
 
@@ -27,8 +27,11 @@ protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt
 # Per-protein embeddings with ProtT5-XL
 protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt
 
+# Per-protein embeddings with ProtBert
+protembedder -m prot_bert -i proteins.fasta -o embeddings.pt
+
 # Per-residue (per amino acid) embeddings
-protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt --per-residue
+protembedder -m prot_bert -i proteins.fasta -o embeddings.pt --per-residue
 
 # GPU with custom batch size
 protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt --device cuda --batch-size 16
@@ -68,6 +71,12 @@ protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
 |-------|-----------|---------------|------------------|
 | `prot_t5_xl` | 3B | 1024 | [Rostlab/prot_t5_xl_half_uniref50-enc](https://huggingface.co/Rostlab/prot_t5_xl_half_uniref50-enc) |
 
+**ProtBert** (Rostlab)
+
+| Model | Parameters | Embedding Dim | HuggingFace Repo |
+|-------|-----------|---------------|------------------|
+| `prot_bert` | 420M | 1024 | [Rostlab/prot_bert](https://huggingface.co/Rostlab/prot_bert) |
+
 ### Python API
 
 ```python
@@ -79,6 +88,9 @@ embedder = ProteinEmbedder("esm2_t33_650M", device="cuda")
 
 # ProtT5-XL
 embedder = ProteinEmbedder("prot_t5_xl", device="cuda")
+
+# ProtBert
+embedder = ProteinEmbedder("prot_bert", device="cuda")
 
 # From FASTA file — per-protein embeddings (default)
 embeddings = embedder.embed_fasta("proteins.fasta", per_residue=False)
@@ -107,7 +119,7 @@ emb = torch.load("embeddings.pt")
 for name, tensor in emb.items():
     print(f"{name}: {tensor.shape}")
 # protein_1: torch.Size([1280])        # ESM-2 650M, per-protein
-# protein_1: torch.Size([18, 1024])    # ProtT5-XL, per-residue
+# protein_1: torch.Size([18, 1024])    # ProtBert, per-residue
 ```
 
 ## OOM Handling

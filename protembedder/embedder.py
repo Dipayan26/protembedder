@@ -1,5 +1,5 @@
 """
-Protein embedding extraction using ESM-2 and ProtT5 models.
+Protein embedding extraction using ESM-2, ProtT5, and ProtBert models.
 
 References:
     ESM-2:
@@ -7,7 +7,7 @@ References:
         with a language model." Science 379.6637 (2023): 1123-1130.
         https://doi.org/10.1126/science.ade2574
 
-    ProtT5-XL:
+    ProtT5-XL / ProtBert:
         Elnaggar, A., et al. "ProtTrans: Toward Understanding the Language of Life
         Through Self-Supervised Learning." IEEE TPAMI 44.10 (2021): 7112-7127.
         https://doi.org/10.1109/TPAMI.2021.3095381
@@ -42,7 +42,16 @@ PROT_T5_MODELS = {
     "prot_t5_xl": ("Rostlab/prot_t5_xl_half_uniref50-enc", 1024),
 }
 
-ALL_MODELS = list(ESM2_MODELS.keys()) + list(PROT_T5_MODELS.keys())
+# ProtBert: name -> (hf_repo, embedding_dim)
+PROT_BERT_MODELS = {
+    "prot_bert": ("Rostlab/prot_bert", 1024),
+}
+
+ALL_MODELS = (
+    list(ESM2_MODELS.keys()) +
+    list(PROT_T5_MODELS.keys()) +
+    list(PROT_BERT_MODELS.keys())
+)
 
 
 def _is_esm2(model_name: str) -> bool:
@@ -51,6 +60,10 @@ def _is_esm2(model_name: str) -> bool:
 
 def _is_prot_t5(model_name: str) -> bool:
     return model_name in PROT_T5_MODELS
+
+
+def _is_prot_bert(model_name: str) -> bool:
+    return model_name in PROT_BERT_MODELS
 
 
 # ---------------------------------------------------------------------------
@@ -156,12 +169,77 @@ class _ProtT5Backend:
 
 
 # ---------------------------------------------------------------------------
+# ProtBert backend
+# ---------------------------------------------------------------------------
+
+class _ProtBertBackend:
+    def __init__(self, model_name: str, device: torch.device):
+        from transformers import BertModel, BertTokenizer
+
+        hf_repo, embed_dim = PROT_BERT_MODELS[model_name]
+        self.embed_dim = embed_dim
+        self.device = device
+
+        logger.info(f"Loading ProtBert model {hf_repo} on {device}...")
+        self.tokenizer = BertTokenizer.from_pretrained(hf_repo, do_lower_case=False)
+        self.model = BertModel.from_pretrained(hf_repo)
+        self.model = self.model.to(device).eval()
+        logger.info(f"ProtBert loaded. Embedding dim: {embed_dim}")
+
+    @staticmethod
+    def _preprocess(seq: str) -> str:
+        """
+        ProtBert requires space-separated amino acids.
+        Non-standard residues U, Z, O, B are mapped to X.
+        """
+        seq = re.sub(r"[UZOB]", "X", seq.upper())
+        return " ".join(seq)
+
+    def embed_batch(
+        self, sequences: List[Tuple[str, str]], per_residue: bool
+    ) -> Dict[str, torch.Tensor]:
+        headers = [h for h, _ in sequences]
+        processed = [self._preprocess(s) for _, s in sequences]
+        seq_lens = [len(s) for _, s in sequences]
+
+        encoding = self.tokenizer(
+            processed,
+            add_special_tokens=True,
+            padding="longest",
+            return_tensors="pt",
+        )
+        input_ids = encoding["input_ids"].to(self.device)
+        attention_mask = encoding["attention_mask"].to(self.device)
+        token_type_ids = encoding.get("token_type_ids")
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            )
+
+        # last_hidden_state: (batch, padded_len, embed_dim)
+        # BERT adds [CLS] at position 0 and [SEP] at position seq_len+1
+        hidden = outputs.last_hidden_state
+
+        embeddings = {}
+        for i, (header, seq_len) in enumerate(zip(headers, seq_lens)):
+            # Skip [CLS] token at index 0; take only AA tokens
+            residue_repr = hidden[i, 1 : seq_len + 1]  # (seq_len, embed_dim)
+            embeddings[header] = residue_repr.cpu() if per_residue else residue_repr.mean(0).cpu()
+        return embeddings
+
+
+# ---------------------------------------------------------------------------
 # Unified ProteinEmbedder
 # ---------------------------------------------------------------------------
 
 class ProteinEmbedder:
     """
-    Extract protein embeddings from sequences using ESM-2 or ProtT5 models.
+    Extract protein embeddings from sequences using ESM-2, ProtT5, or ProtBert.
 
     Parameters
     ----------
@@ -173,12 +251,9 @@ class ProteinEmbedder:
 
     Examples
     --------
-    >>> # ESM-2
     >>> embedder = ProteinEmbedder("esm2_t33_650M")
-
-    >>> # ProtT5-XL
     >>> embedder = ProteinEmbedder("prot_t5_xl")
-
+    >>> embedder = ProteinEmbedder("prot_bert")
     >>> results = embedder.embed_fasta("proteins.fasta", per_residue=False)
     >>> torch.save(results, "embeddings.pt")
     """
@@ -197,8 +272,10 @@ class ProteinEmbedder:
 
         if _is_esm2(model_name):
             self._backend = _ESM2Backend(model_name, self.device)
-        else:
+        elif _is_prot_t5(model_name):
             self._backend = _ProtT5Backend(model_name, self.device)
+        else:
+            self._backend = _ProtBertBackend(model_name, self.device)
 
         self.embed_dim = self._backend.embed_dim
 
