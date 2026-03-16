@@ -18,39 +18,59 @@ pip install protembedder
 
 ## Quick Start
 
+### List available models
+
+```bash
+protembedder list-models
+
+# With details (family, embedding dim, repo)
+protembedder list-models --verbose
+```
+
 ### CLI Usage
 
 ```bash
-# Per-protein embeddings with ESM-2 650M (default)
-protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt
+# Per-protein embeddings — PyTorch output (default)
+protembedder embed -m esm2_t33_650M -i proteins.fasta -o embeddings.pt
 
-# Per-protein embeddings with ProtT5-XL
-protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt
+# HDF5 output
+protembedder embed -m prot_t5_xl -i proteins.fasta -o embeddings.h5 --format h5
 
-# Per-protein embeddings with ProtBert
-protembedder -m prot_bert -i proteins.fasta -o embeddings.pt
+# NumPy .npz output
+protembedder embed -m prot_bert -i proteins.fasta -o embeddings.npz --format npz
+
+# CSV output
+protembedder embed -m prot_bert -i proteins.fasta -o embeddings.csv --format csv
 
 # Per-residue (per amino acid) embeddings
-protembedder -m prot_bert -i proteins.fasta -o embeddings.pt --per-residue
+protembedder embed -m prot_bert -i proteins.fasta -o embeddings.pt --per-residue
 
-# GPU with custom batch size
-protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt --device cuda --batch-size 16
-
-# Small ESM-2 model for quick testing
-protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
+# GPU with custom batch size, disable progress bar
+protembedder embed -m esm2_t33_650M -i proteins.fasta -o embeddings.pt --device cuda --batch-size 16 --no-progress
 ```
 
-### CLI Flags
+### CLI Flags (`embed` subcommand)
 
 | Flag | Short | Required | Default | Description |
 |------|-------|----------|---------|-------------|
-| `--model` | `-m` | Yes | — | Model name (see tables below) |
+| `--model` | `-m` | Yes | — | Model name (see `list-models`) |
 | `--input` | `-i` | Yes | — | Input FASTA file path |
-| `--output` | `-o` | Yes | — | Output .pt file path |
+| `--output` | `-o` | Yes | — | Output file path |
+| `--format` | — | No | `pt` | Output format: `pt`, `h5`, `npz`, `csv` |
 | `--per-residue` | — | No | `False` | Per amino acid embeddings |
 | `--device` | — | No | auto | `cpu`, `cuda`, `cuda:0`, etc. |
 | `--batch-size` | — | No | `8` | Sequences per batch |
+| `--no-progress` | — | No | `False` | Disable tqdm progress bar |
 | `--verbose` | `-v` | No | `False` | Verbose logging |
+
+### Output Formats
+
+| Flag | Extension | Description | Load with |
+|------|-----------|-------------|-----------|
+| `pt` | `.pt` | PyTorch dict `{header: tensor}` | `torch.load()` |
+| `h5` | `.h5` | HDF5 — `embeddings/` group + `headers` dataset | `h5py` / `protembedder.io.load_embeddings()` |
+| `npz` | `.npz` | NumPy archive — `embeddings` array + `headers` array | `np.load()` / `protembedder.io.load_embeddings()` |
+| `csv` | `.csv` | CSV table — `header, emb_0, emb_1, ...` (per-protein) or `header, residue_idx, emb_0, ...` (per-residue) | `pandas.read_csv()` |
 
 ### Available Models
 
@@ -82,44 +102,44 @@ protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
 ```python
 import torch
 from protembedder import ProteinEmbedder
+from protembedder.io import save_embeddings, load_embeddings
 
-# ESM-2
+# Load any supported model
 embedder = ProteinEmbedder("esm2_t33_650M", device="cuda")
+# embedder = ProteinEmbedder("prot_t5_xl")
+# embedder = ProteinEmbedder("prot_bert")
 
-# ProtT5-XL
-embedder = ProteinEmbedder("prot_t5_xl", device="cuda")
+# From FASTA file with progress bar
+embeddings = embedder.embed_fasta("proteins.fasta", per_residue=False, show_progress=True)
 
-# ProtBert
-embedder = ProteinEmbedder("prot_bert", device="cuda")
-
-# From FASTA file — per-protein embeddings (default)
-embeddings = embedder.embed_fasta("proteins.fasta", per_residue=False)
-
-# From sequence list — per-residue embeddings
-sequences = [
-    ("protein_1", "MKTAYIAKQRQISFVKSH"),
-    ("protein_2", "MDEVLQAELPAEG"),
-]
+# From a sequence list
+sequences = [("prot_1", "MKTAYIAKQRQISFVKSH"), ("prot_2", "MDEVLQAELPAEG")]
 embeddings = embedder.embed_sequences(sequences, per_residue=True, batch_size=4)
 
-# Save / Load
-torch.save(embeddings, "embeddings.pt")
-loaded = torch.load("embeddings.pt")
+# Save in any format
+save_embeddings(embeddings, "embeddings.h5",   fmt="h5")
+save_embeddings(embeddings, "embeddings.npz",  fmt="npz")
+save_embeddings(embeddings, "embeddings.csv",  fmt="csv")
+save_embeddings(embeddings, "embeddings.pt",   fmt="pt")
+
+# Load back (pt, h5, npz)
+loaded = load_embeddings("embeddings.h5")
+
+# List all models
+print(ProteinEmbedder.list_models())
 ```
 
-### Output Format
+### Output Format Details
 
-The output `.pt` file contains a Python dict: `{header: tensor}`.
-
-- **Per-protein** (default): `tensor` shape is `(embed_dim,)`
-- **Per-residue** (`--per-residue`): `tensor` shape is `(seq_len, embed_dim)`
+- **Per-protein** (default): `tensor` shape `(embed_dim,)`
+- **Per-residue** (`--per-residue`): `tensor` shape `(seq_len, embed_dim)`
 
 ```python
-emb = torch.load("embeddings.pt")
+emb = load_embeddings("embeddings.pt")
 for name, tensor in emb.items():
     print(f"{name}: {tensor.shape}")
-# protein_1: torch.Size([1280])        # ESM-2 650M, per-protein
-# protein_1: torch.Size([18, 1024])    # ProtBert, per-residue
+# prot_1: torch.Size([1280])        # ESM-2 650M, per-protein
+# prot_1: torch.Size([18, 1024])    # ProtBert, per-residue
 ```
 
 ## OOM Handling

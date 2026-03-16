@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "protembedder"
-version = "0.3.0"
+version = "0.4.0"
 description = "Extract protein embeddings from FASTA files using ESM-2, ProtT5, and ProtBert models"
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,9 @@ dependencies = [
     "fair-esm>=2.0.0",
     "transformers>=4.30.0",
     "sentencepiece>=0.1.99",
+    "numpy>=1.21.0",
+    "tqdm>=4.60.0",
+    "h5py>=3.0.0",
 ]
 
 [project.optional-dependencies]

@@ -19,6 +19,12 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
+try:
+    from tqdm import tqdm as _tqdm
+    _TQDM_AVAILABLE = True
+except ImportError:
+    _TQDM_AVAILABLE = False
+
 from protembedder.fasta import read_fasta, validate_protein_sequences
 
 logger = logging.getLogger(__name__)
@@ -284,6 +290,7 @@ class ProteinEmbedder:
         sequences: List[Tuple[str, str]],
         per_residue: bool = False,
         batch_size: int = 8,
+        show_progress: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Compute embeddings for a list of protein sequences.
@@ -297,6 +304,8 @@ class ProteinEmbedder:
             If False (default), return mean-pooled per-protein embeddings of shape (embed_dim,).
         batch_size : int
             Sequences per batch. Reduce if OOM.
+        show_progress : bool
+            If True, display a tqdm progress bar over batches. Requires tqdm installed.
 
         Returns
         -------
@@ -306,8 +315,21 @@ class ProteinEmbedder:
         sequences = validate_protein_sequences(sequences)
         all_embeddings: Dict[str, torch.Tensor] = {}
         total = len(sequences)
+        n_batches = (total + batch_size - 1) // batch_size
 
-        for start in range(0, total, batch_size):
+        batch_starts = range(0, total, batch_size)
+        if show_progress and _TQDM_AVAILABLE:
+            batch_starts = _tqdm(
+                batch_starts,
+                total=n_batches,
+                desc=f"Embedding [{self.model_name}]",
+                unit="batch",
+                dynamic_ncols=True,
+            )
+        elif show_progress and not _TQDM_AVAILABLE:
+            logger.warning("tqdm not installed — install with `pip install tqdm` for progress bars.")
+
+        for start in batch_starts:
             end = min(start + batch_size, total)
             batch = sequences[start:end]
             logger.info(
@@ -332,6 +354,7 @@ class ProteinEmbedder:
         fasta_path: str,
         per_residue: bool = False,
         batch_size: int = 8,
+        show_progress: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Read a FASTA file and compute embeddings for all sequences.
@@ -345,6 +368,8 @@ class ProteinEmbedder:
             If False (default), return per-protein embeddings.
         batch_size : int
             Sequences per batch.
+        show_progress : bool
+            If True, display a tqdm progress bar over batches.
 
         Returns
         -------
@@ -354,7 +379,12 @@ class ProteinEmbedder:
         logger.info(f"Reading sequences from {fasta_path}...")
         sequences = read_fasta(fasta_path)
         logger.info(f"Found {len(sequences)} sequences.")
-        return self.embed_sequences(sequences, per_residue=per_residue, batch_size=batch_size)
+        return self.embed_sequences(
+            sequences,
+            per_residue=per_residue,
+            batch_size=batch_size,
+            show_progress=show_progress,
+        )
 
     @staticmethod
     def list_models() -> List[str]:

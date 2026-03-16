@@ -8,7 +8,7 @@ Supported models:
         Elnaggar, A., et al. IEEE TPAMI 44.10 (2021). https://doi.org/10.1109/TPAMI.2021.3095381
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "Dipayan Sarkar"
 
 from protembedder.embedder import ProteinEmbedder
