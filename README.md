@@ -1,14 +1,20 @@
 # ProtEmbedder
 
+[![PyPI version](https://img.shields.io/pypi/v/protembedder.svg)](https://pypi.org/project/protembedder/)
+[![Python](https://img.shields.io/pypi/pyversions/protembedder.svg)](https://pypi.org/project/protembedder/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Extract protein embeddings from FASTA files using ESM-2 protein language models.
 
 ## Installation
 
 ```bash
-pip install -e .
+pip install protembedder
 ```
 
 **Requirements:** Python ≥ 3.8, PyTorch ≥ 1.12, [fair-esm](https://github.com/facebookresearch/esm) ≥ 2.0
+
+> For development / editable install: `pip install -e .`
 
 ## Quick Start
 
