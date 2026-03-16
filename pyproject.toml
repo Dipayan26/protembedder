@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "protembedder"
-version = "0.1.0"
-description = "Extract protein embeddings from FASTA files using ESM-2 models"
+version = "0.2.0"
+description = "Extract protein embeddings from FASTA files using ESM-2 and ProtT5 models"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
@@ -28,6 +28,8 @@ classifiers = [
 dependencies = [
     "torch>=1.12.0",
     "fair-esm>=2.0.0",
+    "transformers>=4.30.0",
+    "sentencepiece>=0.1.99",
 ]
 
 [project.optional-dependencies]
