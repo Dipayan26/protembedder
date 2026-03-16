@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/protembedder.svg)](https://pypi.org/project/protembedder/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Extract protein embeddings from FASTA files using ESM-2 protein language models.
+Extract protein embeddings from FASTA files using ESM-2 and ProtT5 protein language models.
 
 ## Installation
 
@@ -12,7 +12,7 @@ Extract protein embeddings from FASTA files using ESM-2 protein language models.
 pip install protembedder
 ```
 
-**Requirements:** Python ≥ 3.8, PyTorch ≥ 1.12, [fair-esm](https://github.com/facebookresearch/esm) ≥ 2.0
+**Requirements:** Python ≥ 3.8, PyTorch ≥ 1.12, [fair-esm](https://github.com/facebookresearch/esm) ≥ 2.0, [transformers](https://github.com/huggingface/transformers) ≥ 4.30
 
 > For development / editable install: `pip install -e .`
 
@@ -21,16 +21,19 @@ pip install protembedder
 ### CLI Usage
 
 ```bash
-# Per-protein embeddings (default) — one vector per sequence
+# Per-protein embeddings with ESM-2 650M (default)
 protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt
 
-# Per-residue embeddings — one vector per amino acid
-protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt --per-residue
+# Per-protein embeddings with ProtT5-XL
+protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt
+
+# Per-residue (per amino acid) embeddings
+protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt --per-residue
 
 # GPU with custom batch size
 protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt --device cuda --batch-size 16
 
-# Small model for quick testing
+# Small ESM-2 model for quick testing
 protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
 ```
 
@@ -38,7 +41,7 @@ protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
 
 | Flag | Short | Required | Default | Description |
 |------|-------|----------|---------|-------------|
-| `--model` | `-m` | Yes | — | ESM-2 model name (see table below) |
+| `--model` | `-m` | Yes | — | Model name (see tables below) |
 | `--input` | `-i` | Yes | — | Input FASTA file path |
 | `--output` | `-o` | Yes | — | Output .pt file path |
 | `--per-residue` | — | No | `False` | Per amino acid embeddings |
@@ -47,6 +50,8 @@ protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
 | `--verbose` | `-v` | No | `False` | Verbose logging |
 
 ### Available Models
+
+**ESM-2** (Meta AI)
 
 | Model | Parameters | Embedding Dim | Layers |
 |-------|-----------|---------------|--------|
@@ -57,19 +62,28 @@ protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt -v
 | `esm2_t36_3B` | 3B | 2560 | 36 |
 | `esm2_t48_15B` | 15B | 5120 | 48 |
 
+**ProtT5** (Rostlab)
+
+| Model | Parameters | Embedding Dim | HuggingFace Repo |
+|-------|-----------|---------------|------------------|
+| `prot_t5_xl` | 3B | 1024 | [Rostlab/prot_t5_xl_half_uniref50-enc](https://huggingface.co/Rostlab/prot_t5_xl_half_uniref50-enc) |
+
 ### Python API
 
 ```python
 import torch
 from protembedder import ProteinEmbedder
 
-# Initialize
+# ESM-2
 embedder = ProteinEmbedder("esm2_t33_650M", device="cuda")
 
-# From FASTA file
+# ProtT5-XL
+embedder = ProteinEmbedder("prot_t5_xl", device="cuda")
+
+# From FASTA file — per-protein embeddings (default)
 embeddings = embedder.embed_fasta("proteins.fasta", per_residue=False)
 
-# From sequence list
+# From sequence list — per-residue embeddings
 sequences = [
     ("protein_1", "MKTAYIAKQRQISFVKSH"),
     ("protein_2", "MDEVLQAELPAEG"),
@@ -92,17 +106,19 @@ The output `.pt` file contains a Python dict: `{header: tensor}`.
 emb = torch.load("embeddings.pt")
 for name, tensor in emb.items():
     print(f"{name}: {tensor.shape}")
-# protein_1: torch.Size([1280])        # per-protein
-# protein_1: torch.Size([18, 1280])    # per-residue
+# protein_1: torch.Size([1280])        # ESM-2 650M, per-protein
+# protein_1: torch.Size([18, 1024])    # ProtT5-XL, per-residue
 ```
 
 ## OOM Handling
 
-If a batch causes an out-of-memory error on GPU, the package automatically falls back to processing sequences one at a time for that batch. You can also reduce `--batch-size` manually.
+If a batch causes an out-of-memory error on GPU, the package automatically falls back to processing sequences one at a time. You can also reduce `--batch-size` manually.
 
-## Reference
+## References
 
 > Lin, Z., et al. "Evolutionary-scale prediction of atomic-level protein structure with a language model." *Science* 379.6637 (2023): 1123-1130. [https://doi.org/10.1126/science.ade2574](https://doi.org/10.1126/science.ade2574)
+
+> Elnaggar, A., et al. "ProtTrans: Toward Understanding the Language of Life Through Self-Supervised Learning." *IEEE Transactions on Pattern Analysis and Machine Intelligence* 44.10 (2021): 7112-7127. [https://doi.org/10.1109/TPAMI.2021.3095381](https://doi.org/10.1109/TPAMI.2021.3095381)
 
 ## License
 

@@ -5,8 +5,11 @@ Usage examples:
     # Per-protein embeddings (default) with ESM-2 650M
     protembedder --model esm2_t33_650M --input proteins.fasta --output embeddings.pt
 
+    # Per-protein embeddings with ProtT5-XL
+    protembedder --model prot_t5_xl --input proteins.fasta --output embeddings.pt
+
     # Per-residue (per amino acid) embeddings
-    protembedder --model esm2_t33_650M --input proteins.fasta --output embeddings.pt --per-residue
+    protembedder --model prot_t5_xl --input proteins.fasta --output embeddings.pt --per-residue
 
     # Use GPU with custom batch size
     protembedder --model esm2_t33_650M --input proteins.fasta --output embeddings.pt --device cuda --batch-size 16
@@ -20,14 +23,14 @@ from pathlib import Path
 
 import torch
 
-from protembedder.embedder import ProteinEmbedder, ESM2_MODELS
+from protembedder.embedder import ProteinEmbedder, ALL_MODELS
 
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="protembedder",
         description=(
-            "Extract protein embeddings from FASTA files using ESM-2 models. "
+            "Extract protein embeddings from FASTA files using ESM-2 or ProtT5 models. "
             "Outputs a .pt file containing a dict mapping sequence headers to "
             "embedding tensors."
         ),
@@ -36,15 +39,17 @@ def create_parser() -> argparse.ArgumentParser:
             "Examples:\n"
             "  # Per-protein embeddings with ESM-2 650M\n"
             "  protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt\n\n"
+            "  # Per-protein embeddings with ProtT5-XL\n"
+            "  protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt\n\n"
             "  # Per-residue embeddings on GPU\n"
-            "  protembedder -m esm2_t33_650M -i proteins.fasta -o embeddings.pt "
+            "  protembedder -m prot_t5_xl -i proteins.fasta -o embeddings.pt "
             "--per-residue --device cuda\n\n"
-            "  # Small model, large batch\n"
+            "  # Small ESM-2 model, large batch\n"
             "  protembedder -m esm2_t6_8M -i proteins.fasta -o embeddings.pt "
             "--batch-size 32\n\n"
-            "Reference:\n"
-            "  Lin, Z., et al. Science 379.6637 (2023): 1123-1130.\n"
-            "  https://doi.org/10.1126/science.ade2574"
+            "References:\n"
+            "  ESM-2:   Lin et al., Science 379.6637 (2023). https://doi.org/10.1126/science.ade2574\n"
+            "  ProtT5:  Elnaggar et al., IEEE TPAMI 44.10 (2021). https://doi.org/10.1109/TPAMI.2021.3095381"
         ),
     )
 
@@ -52,8 +57,8 @@ def create_parser() -> argparse.ArgumentParser:
         "-m", "--model",
         type=str,
         required=True,
-        choices=sorted(ESM2_MODELS.keys()),
-        help="ESM-2 model to use for embedding extraction.",
+        choices=sorted(ALL_MODELS),
+        help="Model to use for embedding extraction (ESM-2 or ProtT5).",
     )
     parser.add_argument(
         "-i", "--input",
@@ -101,7 +106,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.0",
+        version="%(prog)s 0.2.0",
     )
 
     return parser
@@ -133,7 +138,7 @@ def main():
 
     # Run embedding extraction
     embedding_type = "per-residue" if args.per_residue else "per-protein"
-    print(f"ProtEmbedder v0.1.0")
+    print(f"ProtEmbedder v0.2.0")
     print(f"  Model:      {args.model}")
     print(f"  Input:      {input_path}")
     print(f"  Output:     {output_path}")
